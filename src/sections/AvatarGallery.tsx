@@ -2,7 +2,6 @@ import { useRef, useState, useEffect } from 'react';
 import { useAppStore } from '@/store/appStore';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
-import { heygenApi } from '@/services/heygenApi';
 
 interface Avatar {
   id: string;
@@ -12,27 +11,61 @@ interface Avatar {
   avatar_id: string;
 }
 
+const HEYGEN_API_KEY = import.meta.env.VITE_HEYGEN_API_KEY || '';
+
 export function AvatarGallery() {
   const { selectAvatar, setView } = useAppStore();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [avatars, setAvatars] = useState<Avatar[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [apiKeySet, setApiKeySet] = useState(!!HEYGEN_API_KEY);
 
   const fetchAvatars = async () => {
     setLoading(true);
     setError(null);
+    
+    if (!HEYGEN_API_KEY) {
+      setError('API key not configured. Please add VITE_HEYGEN_API_KEY to Vercel environment variables.');
+      setApiKeySet(false);
+      setLoading(false);
+      return;
+    }
+    
     try {
-      const data = await heygenApi.getAvatars();
-      setAvatars(data.map(a => ({
-        id: a.avatar_id,
-        name: a.avatar_name,
-        role: a.gender,
-        image: a.preview_image_url,
-        avatar_id: a.avatar_id
-      })));
-    } catch (err) {
-      setError('Failed to load avatars');
+      const response = await fetch('https://api.heygen.com/v2/avatars', {
+        headers: {
+          'X-Api-Key': HEYGEN_API_KEY,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API Error ${response.status}: ${errorText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Heygen API Response:', data);
+      
+      // Get ALL avatars (not just photo type)
+      const allAvatars = data.data?.avatars || [];
+      
+      if (allAvatars.length === 0) {
+        setError('No avatars found in your Heygen account.');
+      } else {
+        const mappedAvatars: Avatar[] = allAvatars.map((a: any) => ({
+          id: a.avatar_id,
+          name: a.avatar_name || 'Unnamed Avatar',
+          role: a.avatar_type || 'avatar',
+          image: a.preview_image_url || a.preview_video_url || '',
+          avatar_id: a.avatar_id
+        }));
+        setAvatars(mappedAvatars);
+      }
+    } catch (err: any) {
+      console.error('Fetch error:', err);
+      setError(`Failed to load avatars: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -53,6 +86,16 @@ export function AvatarGallery() {
           Choose Your <span className="gradient-text">Host</span>
         </h2>
         <p className="text-gray-600 mb-4">Select from your Heygen avatars</p>
+        
+        {!apiKeySet && (
+          <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg max-w-md mx-auto">
+            <p className="text-amber-700 text-sm">
+              <strong>API Key Missing</strong><br/>
+              Add VITE_HEYGEN_API_KEY to Vercel Environment Variables
+            </p>
+          </div>
+        )}
+        
         <button onClick={fetchAvatars} disabled={loading} className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gray-100 hover:bg-gray-200 text-sm">
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           Refresh
@@ -60,12 +103,13 @@ export function AvatarGallery() {
       </div>
 
       {loading && <Loader2 className="w-12 h-12 text-purple-600 animate-spin" />}
-      {error && <p className="text-red-500 mb-4">{error}</p>}
-
-      {!loading && !error && avatars.length === 0 && (
-        <div className="text-center">
-          <p className="text-gray-600 mb-4">No avatars found</p>
-          <a href="https://app.heygen.com/avatars" target="_blank" className="btn-primary">Create on Heygen</a>
+      
+      {error && (
+        <div className="text-center max-w-md mx-auto mb-8">
+          <p className="text-red-500 mb-4">{error}</p>
+          <a href="https://app.heygen.com/avatars" target="_blank" rel="noopener noreferrer" className="btn-primary inline-block">
+            Go to Heygen
+          </a>
         </div>
       )}
 
