@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from 'react';
 import { useAppStore } from '@/store/appStore';
-import { ChevronLeft, ChevronRight, Sparkles, Loader2, RefreshCw } from 'lucide-react';
+import { Loader2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { heygenApi } from '@/services/heygenApi';
 
