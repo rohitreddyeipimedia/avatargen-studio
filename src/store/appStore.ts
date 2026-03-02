@@ -56,7 +56,12 @@ export const useAppStore = create<AppState>()(
 
       login: (email, name) => {
         set({
-          user: { id: "user-" + Date.now(), email, name, credits: 5 },
+          user: {
+            id: "user-" + Date.now(),
+            email,
+            name,
+            credits: 5
+          },
           isAuthenticated: true,
           currentView: "avatars"
         });
@@ -82,16 +87,24 @@ export const useAppStore = create<AppState>()(
       setSelectedVoiceId: (voiceId) => set({ selectedVoiceId: voiceId }),
 
       fetchAvatars: async () => {
-        const avatars = await heygenApi.getAvatars();
-        set({ heygenAvatars: avatars });
+        try {
+          const avatars = await heygenApi.getAvatars();
+          set({ heygenAvatars: avatars });
+        } catch {
+          console.error("Failed to fetch avatars");
+        }
       },
 
       fetchVoices: async () => {
-        const voices = await heygenApi.getVoices();
-        set({ heygenVoices: voices });
+        try {
+          const voices = await heygenApi.getVoices();
+          set({ heygenVoices: voices });
 
-        if (voices.length > 0 && !get().selectedVoiceId) {
-          set({ selectedVoiceId: voices[0].voice_id });
+          if (voices.length > 0 && !get().selectedVoiceId) {
+            set({ selectedVoiceId: voices[0].voice_id });
+          }
+        } catch {
+          console.error("Failed to fetch voices");
         }
       },
 
@@ -104,7 +117,9 @@ export const useAppStore = create<AppState>()(
 
         const videoId = response.video_id;
 
-        if (!videoId) throw new Error("No video ID returned");
+        if (!videoId) {
+          throw new Error("No video ID returned");
+        }
 
         set((state) => ({
           generations: [
@@ -113,8 +128,10 @@ export const useAppStore = create<AppState>()(
               avatarId,
               script,
               status: "pending",
-              createdAt: new Date().toISOString()
-        
+              createdAt: new Date().toISOString(),
+              videoUrl: undefined,
+              thumbnailUrl: undefined,
+              duration: undefined
             },
             ...state.generations
           ]
