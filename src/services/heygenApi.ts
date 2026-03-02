@@ -1,76 +1,52 @@
-const BASE_URL = "https://backend-gen.vercel.app";
-
-/* =========================
-   TYPES
-========================= */
-
-export interface HeygenAvatar {
-  avatar_id: string;
-  avatar_name: string;
-  preview_image_url: string;
-  gender?: string;
-}
-
-export interface HeygenVoice {
-  voice_id: string;
-  name: string;
-  language?: string;
-}
-
-export interface GenerateVideoPayload {
-  avatar_id: string;
-  voice_id: string;
-  script: string;
-}
-
-/* =========================
-   API SERVICE
-========================= */
+const BASE_URL = "https://backend-gen.vercel.app"; 
+// change if your backend URL is different
 
 export const heygenApi = {
-  getAvatars: async (): Promise<HeygenAvatar[]> => {
-    const response = await fetch(`${BASE_URL}/api/avatars`);
-    if (!response.ok) {
-      throw new Error("Failed to fetch avatars");
-    }
-    return response.json();
-  },
-
-  getVoices: async (): Promise<HeygenVoice[]> => {
-    const response = await fetch(`${BASE_URL}/api/voices`);
-    if (!response.ok) {
-      throw new Error("Failed to fetch voices");
-    }
-    return response.json();
-  },
-
-  generateVideo: async (
-    payload: GenerateVideoPayload
-  ): Promise<any> => {
-    const response = await fetch(`${BASE_URL}/api/generate`, {
+  async generateVideo(
+    avatarId: string,
+    voiceId: string,
+    script: string
+  ) {
+    const res = await fetch(`${BASE_URL}/api/generate`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        avatar_id: avatarId,
+        voice_id: voiceId,
+        script: script
+      })
     });
 
-    if (!response.ok) {
+    if (!res.ok) {
       throw new Error("Failed to generate video");
     }
 
-    return response.json();
+    return res.json();
   },
 
-  getStatus: async (videoId: string): Promise<any> => {
-    const response = await fetch(
+  async getStatus(videoId: string) {
+    const res = await fetch(
       `${BASE_URL}/api/status?video_id=${videoId}`
     );
 
-    if (!response.ok) {
-      throw new Error("Failed to fetch video status");
+    if (!res.ok) {
+      throw new Error("Failed to fetch status");
     }
 
-    return response.json();
+    return res.json();
   },
+
+  async getAvatars() {
+    const res = await fetch(`${BASE_URL}/api/avatars`);
+    if (!res.ok) throw new Error("Failed to fetch avatars");
+    return res.json();
+  },
+
+  async getVoices() {
+    const res = await fetch(`${BASE_URL}/api/voices`);
+    if (!res.ok) throw new Error("Failed to fetch voices");
+    return res.json();
+  }
 };
