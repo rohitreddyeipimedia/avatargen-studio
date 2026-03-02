@@ -1,181 +1,121 @@
-import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { heygenApi, type HeygenAvatar, type HeygenVoice } from '@/services/heygenApi';
-import type { User, Generation, CreditPackage, ViewState } from '@/types';
+import { useState } from 'react';
+import { useAppStore } from '@/store/appStore';
+import {
+  Play,
+  Clock,
+  CheckCircle,
+  Loader2,
+  XCircle,
+  Download,
+  Trash2,
+  Video,
+  Sparkles
+} from 'lucide-react';
+import { toast } from 'sonner';
 
-export const CREDIT_PACKAGES: CreditPackage[] = [
-  { id: 'starter', name: 'Starter', credits: 10, price: 9.99 },
-  { id: 'pro', name: 'Pro', credits: 50, price: 39.99, popular: true },
-  { id: 'enterprise', name: 'Enterprise', credits: 200, price: 129.99 }
-];
+type FilterType = 'all' | 'completed' | 'processing' | 'failed';
 
-interface AppState {
-  user: User | null;
-  isAuthenticated: boolean;
-  currentView: ViewState;
+export function HistoryGrid() {
+  const { generations, updateGeneration, heygenAvatars } = useAppStore();
+  const [filter, setFilter] = useState<FilterType>('all');
+  const [playingVideo, setPlayingVideo] = useState<string | null>(null);
 
-  selectedAvatar: HeygenAvatar | null;
-  heygenAvatars: HeygenAvatar[];
-  avatarsLoading: boolean;
-  avatarsError: string | null;
+  const filteredGenerations = generations.filter(gen =>
+    filter === 'all' ? true : gen.status === filter
+  );
 
-  heygenVoices: HeygenVoice[];
-  voicesLoading: boolean;
-  voicesError: string | null;
+  const getAvatarById = (avatarId: string) => {
+    const avatar = heygenAvatars.find(a => a.avatar_id === avatarId);
 
-  scriptText: string;
-  selectedVoiceId: string;
+    return {
+      name: avatar?.avatar_name || 'Unknown Avatar',
+      role: avatar?.gender === 'male' ? 'Male Avatar' : avatar?.gender === 'female' ? 'Female Avatar' : '',
+      image: avatar?.preview_image_url || '/avatars/sarah.jpg'
+    };
+  };
 
-  generations: Generation[];
-  activeGenerationId: string | null;
+  const handleDelete = (id: string) => {
+    const { generations } = useAppStore.getState();
+    useAppStore.setState({ generations: generations.filter(g => g.id !== id) });
+    toast.success('Video deleted');
+  };
 
-  login: (email: string, name: string) => void;
-  logout: () => void;
-  setView: (view: ViewState) => void;
-  selectAvatar: (avatar: HeygenAvatar) => void;
-  setScriptText: (text: string) => void;
-  setSelectedVoiceId: (voiceId: string) => void;
-  addGeneration: (generation: Generation) => void;
-  updateGeneration: (id: string, updates: Partial<Generation>) => void;
-  addCredits: (credits: number) => void;
-  useCredits: (amount: number) => boolean;
+  const handleDownload = (videoUrl: string) => {
+    const link = document.createElement('a');
+    link.href = videoUrl;
+    link.download = `avatar-video-${Date.now()}.mp4`;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Download started');
+  };
 
-  fetchAvatars: () => Promise<void>;
-  fetchVoices: () => Promise<void>;
-  generateVideo: (avatarId: string, voiceId: string, script: string) => Promise<string>;
-  getStatus: (videoId: string) => Promise<{ status: string; video_url?: string; thumbnail_url?: string; duration?: number }>;
+  return (
+    <div className="min-h-screen flex flex-col items-center px-4 py-24">
+      <h2 className="text-4xl font-bold mb-10">
+        Your <span className="gradient-text">Creations</span>
+      </h2>
+
+      {generations.length === 0 ? (
+        <div className="text-center">
+          <Video className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+          <p>No videos yet</p>
+        </div>
+      ) : (
+        <div className="w-full max-w-6xl grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredGenerations.map(generation => {
+            const avatar = getAvatarById(generation.avatarId);
+            const isPlaying = playingVideo === generation.id;
+
+            return (
+              <div key={generation.id} className="rounded-xl glass p-4">
+                <img
+                  src={avatar.image}
+                  alt={avatar.name}
+                  className="w-full aspect-video object-cover rounded-lg mb-4"
+                />
+
+                <div className="flex justify-between items-center mb-2">
+                  <div>
+                    <p className="font-semibold">{avatar.name}</p>
+                    <p className="text-xs text-gray-500">{avatar.role}</p>
+                  </div>
+                  {generation.status === 'completed' && <CheckCircle className="w-4 h-4 text-green-600" />}
+                  {generation.status === 'processing' && <Loader2 className="w-4 h-4 text-amber-500 animate-spin" />}
+                  {generation.status === 'failed' && <XCircle className="w-4 h-4 text-red-500" />}
+                </div>
+
+                <p className="text-sm text-gray-600 mb-4 line-clamp-2">{generation.script}</p>
+
+                {generation.status === 'completed' && generation.videoUrl && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => window.open(generation.videoUrl, '_blank')}
+                      className="flex-1 bg-purple-600 text-white py-2 rounded-lg text-sm flex items-center justify-center gap-1"
+                    >
+                      <Play className="w-4 h-4" />
+                      {isPlaying ? 'Close' : 'Play'}
+                    </button>
+                    <button
+                      onClick={() => handleDownload(generation.videoUrl!)}
+                      className="bg-gray-200 px-3 rounded-lg"
+                    >
+                      <Download className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(generation.id)}
+                      className="bg-red-100 px-3 rounded-lg"
+                    >
+                      <Trash2 className="w-4 h-4 text-red-600" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
-
-export const useAppStore = create<AppState>()(
-  persist(
-    (set, get) => ({
-      user: null,
-      isAuthenticated: false,
-      currentView: 'login',
-
-      selectedAvatar: null,
-      heygenAvatars: [],
-      avatarsLoading: false,
-      avatarsError: null,
-
-      heygenVoices: [],
-      voicesLoading: false,
-      voicesError: null,
-
-      scriptText: '',
-      selectedVoiceId: '',
-
-      generations: [],
-      activeGenerationId: null,
-
-      login: (email, name) => {
-        set({
-          user: { id: 'user-' + Date.now(), email, name, credits: 5 },
-          isAuthenticated: true,
-          currentView: 'avatars'
-        });
-        get().fetchAvatars();
-        get().fetchVoices();
-      },
-
-      logout: () => {
-        set({
-          user: null,
-          isAuthenticated: false,
-          currentView: 'login',
-          selectedAvatar: null,
-          scriptText: '',
-          heygenAvatars: [],
-          heygenVoices: [],
-          activeGenerationId: null
-        });
-      },
-
-      setView: (view) => set({ currentView: view }),
-      selectAvatar: (avatar) => set({ selectedAvatar: avatar }),
-      setScriptText: (text) => set({ scriptText: text }),
-      setSelectedVoiceId: (voiceId) => set({ selectedVoiceId: voiceId }),
-
-      addGeneration: (generation) => set(state => ({ generations: [generation, ...state.generations] })),
-      updateGeneration: (id, updates) => set(state => ({
-        generations: state.generations.map(g => g.id === id ? { ...g, ...updates } : g)
-      })),
-
-      addCredits: (credits) => set(state => ({
-        user: state.user ? { ...state.user, credits: state.user.credits + credits } : null
-      })),
-
-      useCredits: (amount) => {
-        const { user } = get();
-        if (!user || user.credits < amount) return false;
-        set(state => ({
-          user: state.user ? { ...state.user, credits: state.user.credits - amount } : null
-        }));
-        return true;
-      },
-
-      fetchAvatars: async () => {
-        set({ avatarsLoading: true, avatarsError: null });
-        try {
-          const avatars = await heygenApi.getAvatars();
-          set({ heygenAvatars: avatars, avatarsLoading: false });
-        } catch (error) {
-          console.error(error);
-          set({ avatarsError: 'Failed to load avatars', avatarsLoading: false });
-        }
-      },
-
-      fetchVoices: async () => {
-        set({ voicesLoading: true, voicesError: null });
-        try {
-          const voices = await heygenApi.getVoices();
-          set({ heygenVoices: voices, voicesLoading: false });
-          if (voices.length > 0 && !get().selectedVoiceId) set({ selectedVoiceId: voices[0].voice_id });
-        } catch (error) {
-          console.error(error);
-          set({ voicesError: 'Failed to load voices', voicesLoading: false });
-        }
-      },
-
-      generateVideo: async (avatarId, voiceId, script) => {
-        const response = await heygenApi.generateVideo({
-          video_inputs: [
-            {
-              character: { type: 'avatar', avatar_id: avatarId, avatar_style: 'normal' },
-              voice: { type: 'text', input_text: script, voice_id: voiceId, speed: 1.0 }
-            }
-          ],
-          dimension: { width: 1280, height: 720 },
-          caption: false
-        });
-
-        if (response.error) throw new Error(response.error);
-
-        const videoId = response.data.video_id;
-        set({ activeGenerationId: videoId });
-
-        get().addGeneration({
-          id: videoId,
-          avatarId,
-          script,
-          status: 'pending',
-          createdAt: new Date()
-        });
-
-        return videoId;
-      },
-
-      getStatus: async (videoId) => {
-        return heygenApi.getStatus(videoId);
-      }
-    }),
-    {
-      name: 'avatargen-storage',
-      partialize: (state) => ({
-        user: state.user,
-        isAuthenticated: state.isAuthenticated,
-        generations: state.generations
-      })
-    }
-  )
-);
