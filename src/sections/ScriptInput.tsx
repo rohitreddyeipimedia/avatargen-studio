@@ -12,38 +12,37 @@ export function ScriptInput() {
     setSelectedVoiceId,
     heygenVoices,
     generateVideo,
-    pollVideoStatus,
+    getStatus,
+    useCredits,
     setView,
   } = useAppStore();
 
   const [isGenerating, setIsGenerating] = useState(false);
 
-  // Set default voice when voices load
   useEffect(() => {
     if (heygenVoices.length > 0 && !selectedVoiceId) {
       setSelectedVoiceId(heygenVoices[0].voice_id);
     }
-  }, [heygenVoices, selectedVoiceId, setSelectedVoiceId]);
+  }, [heygenVoices]);
 
-  // Redirect if no avatar selected
   if (!selectedAvatar) {
     setView("avatars");
     return null;
   }
 
   const handleGenerate = async () => {
-    if (!scriptText.trim()) {
-      toast.error("Please enter a script");
+    if (!scriptText) {
+      toast.error("Enter script");
       return;
     }
 
     if (!selectedVoiceId) {
-      toast.error("Please select a voice");
+      toast.error("Select voice");
       return;
     }
 
     if (!selectedAvatar.avatar_id) {
-      toast.error("Invalid avatar selected");
+      toast.error("Invalid avatar");
       return;
     }
 
@@ -53,24 +52,38 @@ export function ScriptInput() {
       return;
     }
 
-    try {
-      setIsGenerating(true);
+    setIsGenerating(true);
 
+    try {
       const videoId = await generateVideo(
         selectedAvatar.avatar_id,
         selectedVoiceId,
         scriptText
       );
 
-      toast.success("Video generation started!");
+      toast.success("Video started");
 
-      await pollVideoStatus(videoId);
+      let attempts = 0;
+      let status = "pending";
 
-      toast.success("Video generated successfully!");
-      setView("history");
-      setScriptText("");
+      while (status === "pending" && attempts < 60) {
+        attempts++;
+        const res = await getStatus(videoId);
+        status = res.status;
+        if (status === "pending") {
+          await new Promise((r) => setTimeout(r, 5000));
+        }
+      }
+
+      if (status === "completed") {
+        toast.success("Video ready");
+        setView("history");
+        setScriptText("");
+      } else {
+        toast.error("Video failed");
+      }
     } catch (err: any) {
-      toast.error(err?.message || "Failed to generate video");
+      toast.error("Error: " + err.message);
     } finally {
       setIsGenerating(false);
     }
@@ -83,9 +96,8 @@ export function ScriptInput() {
       <textarea
         value={scriptText}
         onChange={(e) => setScriptText(e.target.value)}
-        className="w-full border p-4 rounded-lg resize-none"
+        className="w-full border p-4 rounded-lg"
         placeholder="Write your script..."
-        rows={6}
       />
 
       <select
@@ -95,7 +107,7 @@ export function ScriptInput() {
       >
         {heygenVoices.map((voice) => (
           <option key={voice.voice_id} value={voice.voice_id}>
-            {voice.name} {voice.language ? `(${voice.language})` : ""}
+            {voice.name}
           </option>
         ))}
       </select>
@@ -103,7 +115,7 @@ export function ScriptInput() {
       <button
         onClick={handleGenerate}
         disabled={isGenerating}
-        className="w-full bg-purple-600 text-white p-4 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full bg-purple-600 text-white p-4 rounded-lg flex items-center justify-center gap-2"
       >
         {isGenerating ? (
           <>
