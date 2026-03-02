@@ -10,14 +10,10 @@ export const CREDIT_PACKAGES: CreditPackage[] = [
 ];
 
 interface AppState {
-  // User
   user: User | null;
   isAuthenticated: boolean;
-
-  // Navigation
   currentView: ViewState;
 
-  // Avatar & Voices
   selectedAvatar: HeygenAvatar | null;
   heygenAvatars: HeygenAvatar[];
   avatarsLoading: boolean;
@@ -26,40 +22,33 @@ interface AppState {
   heygenVoices: HeygenVoice[];
   voicesLoading: boolean;
   voicesError: string | null;
+
+  scriptText: string;
   selectedVoiceId: string;
 
-  // Script
-  scriptText: string;
-  uploadedFile: File | null;
-
-  // Generations
   generations: Generation[];
   activeGenerationId: string | null;
 
-  // Actions
   login: (email: string, name: string) => void;
   logout: () => void;
   setView: (view: ViewState) => void;
   selectAvatar: (avatar: HeygenAvatar) => void;
   setScriptText: (text: string) => void;
-  setUploadedFile: (file: File | null) => void;
   setSelectedVoiceId: (voiceId: string) => void;
   addGeneration: (generation: Generation) => void;
   updateGeneration: (id: string, updates: Partial<Generation>) => void;
   addCredits: (credits: number) => void;
   useCredits: (amount: number) => boolean;
 
-  // Heygen API Actions
   fetchAvatars: () => Promise<void>;
   fetchVoices: () => Promise<void>;
   generateVideo: (avatarId: string, voiceId: string, script: string) => Promise<string>;
-  getStatus: (videoId: string) => Promise<{ status: 'pending' | 'completed' | 'failed'; videoUrl?: string; thumbnailUrl?: string; duration?: number }>;
+  getStatus: (videoId: string) => Promise<{ status: string; video_url?: string; thumbnail_url?: string; duration?: number }>;
 }
 
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
-      // Initial state
       user: null,
       isAuthenticated: false,
       currentView: 'login',
@@ -72,15 +61,13 @@ export const useAppStore = create<AppState>()(
       heygenVoices: [],
       voicesLoading: false,
       voicesError: null,
-      selectedVoiceId: '',
 
       scriptText: '',
-      uploadedFile: null,
+      selectedVoiceId: '',
 
       generations: [],
       activeGenerationId: null,
 
-      // User actions
       login: (email, name) => {
         set({
           user: { id: 'user-' + Date.now(), email, name, credits: 5 },
@@ -98,7 +85,6 @@ export const useAppStore = create<AppState>()(
           currentView: 'login',
           selectedAvatar: null,
           scriptText: '',
-          uploadedFile: null,
           heygenAvatars: [],
           heygenVoices: [],
           activeGenerationId: null
@@ -108,32 +94,33 @@ export const useAppStore = create<AppState>()(
       setView: (view) => set({ currentView: view }),
       selectAvatar: (avatar) => set({ selectedAvatar: avatar }),
       setScriptText: (text) => set({ scriptText: text }),
-      setUploadedFile: (file) => set({ uploadedFile: file }),
       setSelectedVoiceId: (voiceId) => set({ selectedVoiceId: voiceId }),
 
-      addGeneration: (generation) => set((state) => ({ generations: [generation, ...state.generations] })),
-      updateGeneration: (id, updates) => set((state) => ({
-        generations: state.generations.map((g) => g.id === id ? { ...g, ...updates } : g)
+      addGeneration: (generation) => set(state => ({ generations: [generation, ...state.generations] })),
+      updateGeneration: (id, updates) => set(state => ({
+        generations: state.generations.map(g => g.id === id ? { ...g, ...updates } : g)
       })),
 
-      addCredits: (credits) => set((state) => ({
+      addCredits: (credits) => set(state => ({
         user: state.user ? { ...state.user, credits: state.user.credits + credits } : null
       })),
+
       useCredits: (amount) => {
         const { user } = get();
         if (!user || user.credits < amount) return false;
-        set({ user: { ...user, credits: user.credits - amount } });
+        set(state => ({
+          user: state.user ? { ...state.user, credits: state.user.credits - amount } : null
+        }));
         return true;
       },
 
-      // Heygen API
       fetchAvatars: async () => {
         set({ avatarsLoading: true, avatarsError: null });
         try {
           const avatars = await heygenApi.getAvatars();
           set({ heygenAvatars: avatars, avatarsLoading: false });
-        } catch (err) {
-          console.error(err);
+        } catch (error) {
+          console.error(error);
           set({ avatarsError: 'Failed to load avatars', avatarsLoading: false });
         }
       },
@@ -143,19 +130,21 @@ export const useAppStore = create<AppState>()(
         try {
           const voices = await heygenApi.getVoices();
           set({ heygenVoices: voices, voicesLoading: false });
-          if (voices.length > 0 && !get().selectedVoiceId) {
-            set({ selectedVoiceId: voices[0].voice_id });
-          }
-        } catch (err) {
-          console.error(err);
+          if (voices.length > 0 && !get().selectedVoiceId) set({ selectedVoiceId: voices[0].voice_id });
+        } catch (error) {
+          console.error(error);
           set({ voicesError: 'Failed to load voices', voicesLoading: false });
         }
       },
 
       generateVideo: async (avatarId, voiceId, script) => {
         const response = await heygenApi.generateVideo({
-          character: { avatar_id: avatarId, type: 'avatar', avatar_style: 'normal' },
-          voice: { input_text: script, voice_id: voiceId, type: 'text', speed: 1.0 },
+          video_inputs: [
+            {
+              character: { type: 'avatar', avatar_id: avatarId, avatar_style: 'normal' },
+              voice: { type: 'text', input_text: script, voice_id: voiceId, speed: 1.0 }
+            }
+          ],
           dimension: { width: 1280, height: 720 },
           caption: false
         });
@@ -177,15 +166,7 @@ export const useAppStore = create<AppState>()(
       },
 
       getStatus: async (videoId) => {
-        const result = await heygenApi.getStatus(videoId);
-        // map status
-        const statusMap = ['pending', 'completed', 'failed'] as const;
-        return {
-          status: statusMap.includes(result.status as any) ? result.status as any : 'failed',
-          videoUrl: result.video_url,
-          thumbnailUrl: result.thumbnail_url,
-          duration: result.duration
-        };
+        return heygenApi.getStatus(videoId);
       }
     }),
     {
