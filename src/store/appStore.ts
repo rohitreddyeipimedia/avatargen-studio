@@ -113,7 +113,8 @@ export const useAppStore = create<AppState>()(
               avatarId,
               script,
               status: "pending",
-              createdAt: new Date()
+              createdAt: new Date().toISOString()
+        
             },
             ...state.generations
           ]
